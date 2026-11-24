@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -13,16 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Copiar inject.js do app Android
-        run: copy app\src\main\assets\inject.js desktop\inject.js
-      - name: Instalar dependencias
-        run: npm install
+      - run: copy app\src\main\assets\inject.js desktop\inject.js
+      - run: npm install
         working-directory: desktop
-      - name: Gerar instalador
-        run: npm run dist
+      - run: npm run dist
         working-directory: desktop
-      - uses: actions/upload-artifact@v4
+      - uses: softprops/action-gh-release@v2
         with:
-          name: HaxBallBoost-PC
-          path: desktop/dist/*.exe
-          if-no-files-found: error
+          tag_name: pc-latest
+          name: HaxBall Boost PC
+          files: desktop/dist/*.exe
