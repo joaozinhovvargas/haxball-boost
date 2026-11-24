@@ -2,7 +2,8 @@
   if (window.__hbx) return; window.__hbx = true;
   const KEY = 'hbx_cfg';
   const def = { showFps: true, hudOpacity: 0.8, hudColor: '#00ff88', hudSize: 14,
-    hudPos: 'tl', lite: false, avMode: 'off', avList: '🔴,🟠,🟡,🟢,🔵,🟣', avMs: 500 };
+    hudPos: 'tl', lite: false, avMode: 'off', avList: '🔴,🟠,🟡,🟢,🔵,🟣', avMs: 500,
+    joy: false, joySize: 130, joyOpacity: 0.55, joySwap: false };
   let cfg = Object.assign({}, def);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} apply(); };
@@ -37,6 +38,11 @@
   row('Intervalo (ms)', txt('avMs', true));
   const h3 = document.createElement('div'); h3.innerHTML = '<br><b>Desempenho</b>'; panel.append(h3);
   row('Modo leve', chk('lite'));
+  const h4 = document.createElement('div'); h4.innerHTML = '<br><b>Mobile</b>'; panel.append(h4);
+  row('Joystick + botão chutar', chk('joy'));
+  row('Tamanho', rng('joySize', 80, 220, 5));
+  row('Opacidade', rng('joyOpacity', 0.2, 1, 0.05));
+  row('Inverter lados (canhoto)', chk('joySwap'));
 
   function apply() {
     hud.style.display = cfg.showFps ? 'block' : 'none';
@@ -50,6 +56,7 @@
         st.textContent = '*{animation:none!important;transition:none!important;text-shadow:none!important;box-shadow:none!important}canvas{will-change:transform}'; document.head.append(st); }
     } else if (st) st.remove();
     restartAvatar();
+    applyJoy();
   }
 
   // FPS
@@ -74,6 +81,66 @@
     const list = cfg.avMode === 'rainbow' ? RAINBOW : cfg.avList.split(',').map(s => s.trim()).filter(Boolean);
     if (!list.length) return;
     timer = setInterval(() => { sendAvatar(list[idx++ % list.length]); }, Math.max(100, cfg.avMs));
+  }
+
+  // ===== Joystick mobile =====
+  const KEYMAP = { left: [37, 'ArrowLeft', 'ArrowLeft'], up: [38, 'ArrowUp', 'ArrowUp'],
+    right: [39, 'ArrowRight', 'ArrowRight'], down: [40, 'ArrowDown', 'ArrowDown'], kick: [88, 'x', 'KeyX'] };
+  const held = {};
+  function key(name, down) {
+    if (!!held[name] === down) return;
+    held[name] = down;
+    const d = gameDoc(); if (!d) return;
+    const w = d.defaultView, m = KEYMAP[name];
+    (d.body || d).dispatchEvent(new w.KeyboardEvent(down ? 'keydown' : 'keyup',
+      { key: m[1], code: m[2], keyCode: m[0], which: m[0], bubbles: true, cancelable: true }));
+  }
+  const joyBase = document.createElement('div');
+  const joyKnob = document.createElement('div');
+  const kickBtn = document.createElement('div');
+  joyBase.style.cssText = css + 'display:none;bottom:24px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.6);touch-action:none;';
+  joyKnob.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;background:rgba(255,255,255,.75);pointer-events:none;';
+  joyBase.append(joyKnob);
+  kickBtn.textContent = 'CHUTAR';
+  kickBtn.style.cssText = css + 'display:none;bottom:40px;border-radius:50%;background:rgba(255,80,80,.45);border:2px solid rgba(255,255,255,.7);color:#fff;font-weight:bold;font-size:14px;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;';
+  document.body.append(joyBase, kickBtn);
+
+  let joyId = null;
+  function joyMove(t) {
+    const r = joyBase.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2, max = r.width / 2;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > max) { dx *= max / dist; dy *= max / dist; }
+    joyKnob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
+    const dead = max * 0.25;
+    key('left', dx < -dead); key('right', dx > dead); key('up', dy < -dead); key('down', dy > dead);
+  }
+  function joyEnd() {
+    joyId = null; joyKnob.style.transform = 'translate(-50%,-50%)';
+    ['left', 'right', 'up', 'down'].forEach(k => key(k, false));
+  }
+  joyBase.addEventListener('touchstart', e => { e.preventDefault(); if (joyId !== null) return; const t = e.changedTouches[0]; joyId = t.identifier; joyMove(t); }, { passive: false });
+  joyBase.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === joyId) joyMove(t); }, { passive: false });
+  joyBase.addEventListener('touchend', e => { for (const t of e.changedTouches) if (t.identifier === joyId) joyEnd(); });
+  joyBase.addEventListener('touchcancel', joyEnd);
+  kickBtn.addEventListener('touchstart', e => { e.preventDefault(); kickBtn.style.background = 'rgba(255,80,80,.85)'; key('kick', true); }, { passive: false });
+  const kickUp = () => { kickBtn.style.background = 'rgba(255,80,80,.45)'; key('kick', false); };
+  kickBtn.addEventListener('touchend', kickUp);
+  kickBtn.addEventListener('touchcancel', kickUp);
+
+  function applyJoy() {
+    const on = !!cfg.joy, s = cfg.joySize, k = Math.round(s * 0.75);
+    joyBase.style.display = on ? 'block' : 'none';
+    kickBtn.style.display = on ? 'flex' : 'none';
+    if (!on) { joyEnd(); key('kick', false); }
+    joyBase.style.width = joyBase.style.height = s + 'px';
+    joyKnob.style.width = joyKnob.style.height = Math.round(s * 0.45) + 'px';
+    kickBtn.style.width = kickBtn.style.height = k + 'px';
+    joyBase.style.opacity = kickBtn.style.opacity = cfg.joyOpacity;
+    joyBase.style.left = joyBase.style.right = kickBtn.style.left = kickBtn.style.right = 'auto';
+    joyBase.style[cfg.joySwap ? 'right' : 'left'] = '30px';
+    kickBtn.style[cfg.joySwap ? 'left' : 'right'] = '30px';
   }
   apply();
 })();
