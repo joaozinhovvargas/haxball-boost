@@ -1,0 +1,22 @@
+{
+  "name": "haxball-boost",
+  "version": "1.0.0",
+  "description": "HaxBall Boost - HaxBall com HUD e avatar automatico",
+  "main": "main.js",
+  "author": "jp",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.jp.hbx.pc",
+    "productName": "HaxBall Boost",
+    "files": ["main.js", "inject.js"],
+    "win": { "target": ["nsis", "portable"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}
